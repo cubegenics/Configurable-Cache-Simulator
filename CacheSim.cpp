@@ -61,54 +61,6 @@ string convert(string inst, int mem_size, int block_size){
     return temp;
 }
 
-
-vector<string> instruction_generator(int spatial, int num, int num2, int mem_size, int block_size){
-    int iterations = num/spatial;
-    int random_offset;
-    int counter=0;
-    int counter_completion=0;
-    int random;
-    int d;
-    cout<<"\n\n";
-    vector<string> instructions;
-    vector<string> spatial_locality;
-    string machine_inst;
-    for(int j=0;j<iterations;j++){
-        string x="";
-        random = rand()%(mem_size/block_size);
-        for(int i=0;i<spatial;i++){
-            random_offset = rand()%(block_size/4);
-            random_offset *= 4;
-            int wr_rd = rand()%2;
-            if(wr_rd==1){
-                d = rand()%10000;
-                x="wr "+to_string(random)+" "+to_string(random_offset)+" "+to_string(d);
-            }
-            else{
-                x="rd "+to_string(random)+" "+to_string(random_offset);
-            }
-            machine_inst = convert(x,mem_size,block_size);
-            spatial_locality.push_back(machine_inst);
-            counter_completion++;
-        }
-        counter++;
-        if(num2==counter){
-            random_shuffle(spatial_locality.begin(),spatial_locality.end());
-            for(int p=0;p<spatial_locality.size();p++){
-                instructions.push_back(spatial_locality[p]);
-            }
-            spatial_locality.clear();
-            counter=0;
-        }
-        if(counter_completion%(num/10)==0){
-            cout<<(counter_completion*100/num)<<" percent instructions generated!\n";   
-        }
-    }
-    instructions.push_back(convert("*end:",mem_size,block_size));
-    cout<<"Instruction generation completed!\n";
-    return instructions;
-}
-
 vector<string> getInstructions(int mem_size, int block_size){
     string end="*end:";
     cin.ignore();
@@ -128,66 +80,6 @@ vector<string> getInstructions(int mem_size, int block_size){
 string hextoint(string x){
     int w = stoi(x,0,16);
     return to_string(w);
-}
-
-vector<string> tracetoaddress(int mem_size, int block_size){
-    cout<<"Enter instructions:\n";
-    string trace, trace_trimmed;
-    vector<string> vec;
-    string address="";
-    string number_bits;
-    string offset,mem_block_add;
-    string end = "*end:";
-    int offset_length = log2(block_size);
-    int index1,index2,memadd,offset_num,mem_block_add_num;
-    while(1){
-        cin>>trace;
-        if(trace==end){
-            vec.push_back(convert(trace,mem_size,block_size));
-            break;
-        }
-        for(index1=0;index1<trace.length();index1++){
-            if(trace[index1]!=' '){
-                break;
-            }
-        }
-        for(index2=index1;index2<trace.length();index2++){
-            if(trace[index2]==' '){
-                break;
-            }
-        }
-        trace_trimmed = trace.substr(index1,index2-index1);
-        if(trace_trimmed[0]=='1'){
-            address = address + "rd ";
-            memadd = stoi(trace_trimmed.substr(1),0,16);
-            bitset<64> b(memadd);
-            number_bits = b.to_string();
-            offset = number_bits.substr(number_bits.length()-offset_length+2);
-            mem_block_add = number_bits.substr(0,number_bits.length()-offset_length+2);
-            mem_block_add_num = stoi(mem_block_add,0,2);
-            offset_num = stoi(offset,0,2);
-            offset_num = offset_num*4;
-            address += to_string(mem_block_add_num);
-            address += " " + to_string(offset_num);
-        }
-        else{
-            address = address + "wr ";
-            memadd = stoi(trace_trimmed.substr(1),0,16);
-            bitset<64> b(memadd);
-            number_bits = b.to_string();
-            offset = number_bits.substr(number_bits.length()-offset_length+2);
-            mem_block_add = number_bits.substr(0,number_bits.length()-offset_length+2);
-            mem_block_add_num = stoi(mem_block_add,0,2);
-            offset_num = stoi(offset,0,2);
-            offset_num = offset_num*4;
-            address += to_string(mem_block_add_num);
-            address += " " + to_string(offset_num);
-            address += " 1";
-        }
-        vec.push_back(convert(address,mem_size,block_size));
-        address.clear();
-    }
-    return vec;
 }
 
 void updateCounters(int index, int way, int mem_size, int block_size, int cache_size, int ways, vector<vector<int> > &counter){ 
@@ -356,102 +248,43 @@ int main(){
     cout<<"INDEX: "<<index_length<<" bits\n";
     cout<<"TAG: "<<tag_length<<" bits\n";
     cout<<"SETS: "<<sets<<"\n";
-    int q;
     int num,spatial_l,num_instruc_shuffle;
-    cout<<"Enter type of instruction:\n 0 for manual input\n 1 for random instructions\n 2 for trace input:\n";
-    cin>>q;
-    if(q==1){
-        cout<<"Enter the number of instructions: ";
-        cin>>num;
-        cout<<"Enter a number to represent the spatial locality of memory access\n 1 being the lowest and 10 being the highest: ";
-        cin>>spatial_l;
-        vector<string> vec = instruction_generator(spatial_l,num,5, mem_size, block_size);
-        initialise(block_size, mem_size, Mem, empty_bit, data_arr);
-        int counter_percentage=0;
-        int x=0;
-        for(int i=0;i<vec.size()-1;i++){
-            parse_instruction(vec[i], mem_size, cache_size, block_size);
-            int hitStatus=hitWay(mem_size, ways, sets, block_size, tag, empty_bit);
-            if(vec[i][0]=='0'){
-                if(hitStatus==-1){
-                    read_miss(ways, mem_size, sets, cache_size, block_size, counter, modified, tag, Mem, data_arr, empty_bit);
-                }
-                else{
-                    read_hit_counter++;
-                    read_hit(mem_size, block_size, cache_size, ways, counter);
-                }
+    vector<string> vec;
+    cout<<"The instruction set:\n\nExample: rd 24 4\nHere, rd -> read operation, 24 -> memory location,  4 -> block offset\n\n";
+    cout<<"Example: wr 67 8 100\nHere, wr -> write operation,  67 -> memory location,  8 -> block offset,  100 -> data to be written\n\nInstructions:\n";
+    vec=getInstructions(mem_size,block_size);
+    initialise(block_size, mem_size, Mem, empty_bit, data_arr);
+    for(int i=0;i<vec.size()-1;i++){
+        parse_instruction(vec[i], mem_size, cache_size, block_size);
+        int hitStatus=hitWay(mem_size, ways, sets, block_size, tag, empty_bit);
+        if(vec[i][0]=='0'){
+            if(hitStatus==-1){
+                read_miss(ways, mem_size, sets, cache_size, block_size, counter, modified, tag, Mem, data_arr, empty_bit);
+                cout<<"Miss! ";
+                cout<<readCache(C_offset,data_arr)<<"\n";
             }
             else{
-                if(hitStatus==-1){
-                    write_miss(ways, mem_size, sets, cache_size, block_size, counter, modified, tag, Mem, data_arr, empty_bit);
-                }
-                else{
-                    write_hit_counter++;
-                    write_hit(ways, mem_size, sets, cache_size, block_size, counter, modified, tag, Mem, data_arr, empty_bit);
-                }
+                read_hit_counter++;
+                read_hit(mem_size, block_size, cache_size, ways, counter);
+                cout<<"Hit! ";
+                cout<<readCache(C_offset,data_arr)<<"\n";
             }
-            counter_percentage++;
-            if(counter_percentage==vec.size()/10){
-                cout<<to_string(x*10)<<"% completed\n";
-                counter_percentage=0;
-                x++;
-            }
-        }
-        cout<<"100% completed\n";
-        cout<<"Write hits: "<<write_hit_counter<<"\n";
-        cout<<"Read hits: "<<read_hit_counter<<"\n";
-        cout<<"Hit rate = ";
-        cout<<hit_num/(hit_num+miss_num)<<setprecision(12)<<"\n";
-    }
-    else{
-        vector<string> vec;
-        if(q==2){
-            vec=tracetoaddress(mem_size,block_size);
         }
         else{
-            cout<<"The instruction set:\n\nExample: rd 24 4\nHere, rd -> read operation, 24 -> memory location,  4 -> block offset\n\n";
-            cout<<"Example: wr 67 8 100\nHere, wr -> write operation,  67 -> memory location,  8 -> block offset,  100 -> data to be written\n\nInstructions:\n";
-            vec=getInstructions(mem_size,block_size);
-        }
-        initialise(block_size, mem_size, Mem, empty_bit, data_arr);
-        for(int i=0;i<vec.size()-1;i++){
-            parse_instruction(vec[i], mem_size, cache_size, block_size);
-            int hitStatus=hitWay(mem_size, ways, sets, block_size, tag, empty_bit);
-            if(vec[i][0]=='0'){
-                if(hitStatus==-1){
-                    read_miss(ways, mem_size, sets, cache_size, block_size, counter, modified, tag, Mem, data_arr, empty_bit);
-                    if(q==0){
-                        cout<<"Miss! ";
-                        cout<<readCache(C_offset,data_arr)<<"\n";
-                    }
-                }
-                else{
-                    read_hit_counter++;
-                    read_hit(mem_size, block_size, cache_size, ways, counter);
-                    if(q==0){
-                        cout<<"Hit! ";
-                        cout<<readCache(C_offset,data_arr)<<"\n";
-                    }
-                }
+            if(hitStatus==-1){
+                write_miss(ways, mem_size, sets, cache_size, block_size, counter, modified, tag, Mem, data_arr, empty_bit);
+                cout<<"Miss!\n";
             }
             else{
-                if(hitStatus==-1){
-                    write_miss(ways, mem_size, sets, cache_size, block_size, counter, modified, tag, Mem, data_arr, empty_bit);
-                    if(q==0)cout<<"Miss!\n";
-                }
-                else{
-                    write_hit_counter++;
-                    write_hit(ways, mem_size, sets, cache_size, block_size, counter, modified, tag, Mem, data_arr, empty_bit);
-                    if(q==0){
-                        cout<<"Hit! ";
-                        cout<<readCache(C_offset,data_arr)<<"\n";
-                    }
-                }
+                write_hit_counter++;
+                write_hit(ways, mem_size, sets, cache_size, block_size, counter, modified, tag, Mem, data_arr, empty_bit);
+                cout<<"Hit! ";
+                cout<<readCache(C_offset,data_arr)<<"\n";
             }
         }
-        cout<<"Write hits: "<<write_hit_counter<<"\n";
-        cout<<"Read hits: "<<read_hit_counter<<"\n";
-        cout<<"Hit rate: ";
-        cout<<hit_num/(hit_num+miss_num)<<setprecision(12)<<"\n";
     }
+    cout<<"Write hits: "<<write_hit_counter<<"\n";
+    cout<<"Read hits: "<<read_hit_counter<<"\n";
+    cout<<"Hit rate: ";
+    cout<<hit_num/(hit_num+miss_num)<<setprecision(12)<<"\n";
 }
